@@ -28,6 +28,12 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+    <string>This app needs access to your photo library so you can select and upload images for your activities and restaurants.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>This app needs access to your camera so you can take and upload new photos for your activities and restaurants.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>This app needs microphone access for video features.</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
