@@ -1,12 +1,17 @@
 // In: lib/features/partner/screens/manage_bookings_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/reservation.dart';
 import '../services/api_service.dart';
 
 class ManageBookingsScreen extends StatefulWidget {
-  const ManageBookingsScreen({super.key});
+  // --- UPDATED: It now requires the token to be passed in ---
+  final String token;
+
+  const ManageBookingsScreen({
+    super.key,
+    required this.token,
+  });
 
   @override
   State<ManageBookingsScreen> createState() => _ManageBookingsScreenState();
@@ -14,12 +19,10 @@ class ManageBookingsScreen extends StatefulWidget {
 
 class _ManageBookingsScreenState extends State<ManageBookingsScreen> with SingleTickerProviderStateMixin {
   final ApiService _apiService = ApiService();
-  final _storage = const FlutterSecureStorage();
   late TabController _tabController;
 
   Future<void>? _fetchFuture;
 
-  // Lists to hold the categorized bookings
   List<Object> _allBookings = [];
   List<Object> _pending = [];
   List<Object> _confirmed = [];
@@ -31,28 +34,19 @@ class _ManageBookingsScreenState extends State<ManageBookingsScreen> with Single
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    // Fetch data when the screen is first loaded
     _fetchFuture = _fetchAndCategorizeBookings();
   }
 
   Future<void> _fetchAndCategorizeBookings() async {
-    // In a real app, you would have a loading state for the whole screen
-    // For simplicity, we are handling it in the FutureBuilder
-
-    final token = await _storage.read(key: 'auth_token');
-    if (token == null) {
-      throw Exception("Auth token not found.");
-    }
-
+    // --- THE FIX: Uses passed-in widget.token, no longer reads from storage ---
     try {
-      final activityBookingsFuture = _apiService.getActivityReservations(token);
-      final restaurantBookingsFuture = _apiService.getRestaurantReservations(token);
+      final activityBookingsFuture = _apiService.getActivityReservations(widget.token);
+      final restaurantBookingsFuture = _apiService.getRestaurantReservations(widget.token);
 
       final results = await Future.wait([activityBookingsFuture, restaurantBookingsFuture]);
 
       final allBookings = [...results[0], ...results[1]];
 
-      // Update state only if the widget is still in the tree
       if (mounted) {
         setState(() {
           _allBookings = allBookings;
@@ -62,7 +56,6 @@ class _ManageBookingsScreenState extends State<ManageBookingsScreen> with Single
         });
       }
     } catch (e) {
-      // Let the FutureBuilder handle showing this error
       rethrow;
     }
   }
@@ -77,21 +70,20 @@ class _ManageBookingsScreenState extends State<ManageBookingsScreen> with Single
     setState(() { _isUpdating = true; });
 
     try {
-      final token = await _storage.read(key: 'auth_token');
-      if (token == null) throw Exception("Auth token not found.");
-
+      // --- THE FIX: Uses passed-in widget.token ---
       int id = (booking is Reservation) ? booking.id : (booking as RestaurantReservation).id;
       bool isRestaurant = booking is RestaurantReservation;
 
-      await _apiService.updateReservationStatus(token, id, newStatus, isRestaurant: isRestaurant);
+      await _apiService.updateReservationStatus(widget.token, id, newStatus, isRestaurant: isRestaurant);
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Booking updated to $newStatus')));
 
-      // Refresh the list after updating
       await _fetchAndCategorizeBookings();
 
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     } finally {
       if(mounted) {
         setState(() { _isUpdating = false; });
@@ -142,7 +134,10 @@ class _ManageBookingsScreenState extends State<ManageBookingsScreen> with Single
                   ],
                 ),
                 if (_isUpdating)
-                  const Center(child: CircularProgressIndicator()),
+                  Container(
+                    color: Colors.black.withOpacity(0.1),
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
               ],
             ),
           );

@@ -12,11 +12,12 @@ import '../models/user.dart';
 import '../models/reservation.dart';
 import '../models/restaurant.dart';
 import '../models/review.dart';
+import '../models/partner_stats.dart';
 
 class ApiService {
   // =======================================================================
   // IMPORTANT: THIS IS THE ONLY LINE YOU'LL NEED TO CHANGE LATER
-  static const String _baseUrl = 'YOUR_BACKEND_URL_GOES_HERE';
+  static const String _baseUrl = 'https://insidecasa.me';
   // =======================================================================
 
   /// Helper method to create authenticated headers.
@@ -71,6 +72,20 @@ class ApiService {
       return body.map((dynamic item) => Activity.fromJson(item)).toList();
     } else {
       throw Exception('Failed to load activities for partner');
+    }
+  }
+
+  Future<PartnerStats> getPartnerStats(String token) async {
+    // NOTE: This endpoint is an assumption. You'll need to confirm it with the backend dev.
+    final response = await http.get(
+      Uri.parse('$_baseUrl/api/partner/stats'), // Assumed endpoint
+      headers: _getAuthHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      return PartnerStats.fromJson(jsonDecode(response.body));
+    } else {
+      throw Exception('Failed to load partner statistics');
     }
   }
 
@@ -149,6 +164,42 @@ class ApiService {
     // A successful DELETE often returns 200 OK or 204 No Content.
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception('Failed to delete listing. Status code: ${response.statusCode}');
+    }
+  }
+
+  // In: lib/features/partner/services/api_service.dart
+
+  // In: lib/features/partner/services/api_service.dart
+
+  Future<Activity> updateActivity({
+    required String token,
+    required int activityId,
+    required int partnerId,      // ADDED THIS
+    required int categoryId,     // ADDED THIS
+    required String title,
+    required String description,
+    required String location,
+    required double price,
+    required int duration,
+  }) async {
+    final response = await http.put(
+      Uri.parse('$_baseUrl/api/activities/$activityId'),
+      headers: _getAuthHeaders(token),
+      body: jsonEncode({
+        'partner_id': partnerId,    // And included it in the body
+        'category_id': categoryId,  // And included it in the body
+        'title': title,
+        'description': description,
+        'location': location,
+        'price': price,
+        'duration': duration,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return Activity.fromJson(jsonDecode(response.body));
+    } else {
+      throw Exception('Failed to update activity. Status: ${response.statusCode}, Body: ${response.body}');
     }
   }
 

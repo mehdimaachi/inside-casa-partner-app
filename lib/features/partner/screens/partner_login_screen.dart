@@ -33,6 +33,8 @@ class _PartnerLoginScreenState extends State<PartnerLoginScreen> {
     super.dispose();
   }
 
+// In: partner_login_screen.dart
+
   Future<void> _performLogin() async {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
@@ -42,23 +44,41 @@ class _PartnerLoginScreenState extends State<PartnerLoginScreen> {
       _errorMessage = null;
     });
 
-    // --- FAKE LOGIN LOGIC ---
+    // --- THIS IS THE REAL, LIVE LOGIC ---
     try {
-      await Future.delayed(const Duration(seconds: 1));
-      final fakeUser = PartnerUser(
-        id: 1, fullname: "Test Partner", email: "partner@test.com", phone: "123456789", role: 'partner', createdAt: DateTime.now(), updatedAt: DateTime.now(),
+      // 1. Call the real ApiService with the user's input
+      final result = await _apiService.login(
+        _emailController.text,
+        _passwordController.text,
       );
-      const fakeToken = 'fake-jwt-token-for-testing';
-      await _storage.write(key: 'auth_token', value: fakeToken);
-      await _storage.write(key: 'partner_id', value: fakeUser.id.toString());
-      await _storage.write(key: 'partner_name', value: fakeUser.fullname);
 
+      final PartnerUser user = result['user'];
+      final String token = result['token'];
+
+      // 2. Add a security check: only allow 'partner' roles to log in
+      if (user.role != 'partner') {
+        throw Exception("Access Denied. Only partners can log in here.");
+      }
+
+      // 3. Store the real token and user info
+      await _storage.write(key: 'auth_token', value: token);
+      await _storage.write(key: 'user_id', value: user.id.toString());
+      await _storage.write(key: 'partner_name', value: user.fullname);
+
+      // 4. Navigate to the dashboard if login is successful
+      if (!mounted) return;
+      // Navigate to the dashboard, passing the user object AND the token
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (context) => PartnerDashboardScreen(partner: fakeUser),
+          builder: (context) => PartnerDashboardScreen(
+            partner: user,
+            token: token, // Pass the token as well
+          ),
         ),
       );
+
     } catch (e) {
+      // This will now catch real errors from the server!
       setState(() {
         _errorMessage = e.toString().replaceFirst("Exception: ", "");
       });

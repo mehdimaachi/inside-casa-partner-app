@@ -34,25 +34,26 @@ class Activity {
   });
 
   /// Factory constructor to create an Activity from a JSON map from the API.
+  // In: lib/features/partner/models/activity.dart
+
   factory Activity.fromJson(Map<String, dynamic> json) {
     return Activity(
-      id: json['id'] as int?,
-      title: json['title'] as String,
-      description: json['description'] as String,
-      location: json['location'] as String,
-      // This pattern handles both int and double values from JSON safely.
-      latitude: (json['latitude'] as num).toDouble(),
-      longitude: (json['longitude'] as num).toDouble(),
-      price: (json['price'] as num).toDouble(),
-      duration: json['duration'] as int,
-      isActive: json['is_active'] as bool,
-      // Simplified the list parsing.
+      id: json['id'],
+      title: json['title'],
+      description: json['description'],
+      location: json['location'],
+      // THE FIX: We parse the value from a string to a double.
+      // We use .toString() first as a safety measure in case the API sometimes sends a number.
+      latitude: double.parse(json['latitude'].toString()),
+      longitude: double.parse(json['longitude'].toString()),
+      price: double.parse(json['price'].toString()),
+      duration: json['duration'],
+      isActive: json['is_active'],
       imageUrls: List<String>.from(json['image_urls']),
-      categoryId: json['category_id'] as int,
-      partnerId: json['partner_id'] as int,
-      // Parse string dates into DateTime objects. It's safer to use tryParse.
-      createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt']) : null,
-      updatedAt: json['updatedAt'] != null ? DateTime.tryParse(json['updatedAt']) : null,
+      categoryId: json['category_id'],
+      partnerId: json['partner_id'],
+      createdAt: DateTime.parse(json['createdAt']),
+      updatedAt: DateTime.parse(json['updatedAt']),
     );
   }
 

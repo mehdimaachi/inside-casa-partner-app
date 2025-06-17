@@ -31,14 +31,17 @@ class Restaurant {
     required this.partnerId,
   });
 
+// In: lib/features/partner/models/restaurant.dart
+
   factory Restaurant.fromJson(Map<String, dynamic> json) {
     return Restaurant(
       id: json['id'],
       name: json['name'],
       description: json['description'],
       address: json['address'],
-      latitude: (json['latitude'] as num).toDouble(),
-      longitude: (json['longitude'] as num).toDouble(),
+      // THE FIX: Parse from a string to a double.
+      latitude: double.parse(json['latitude'].toString()),
+      longitude: double.parse(json['longitude'].toString()),
       phone: json['phone'],
       email: json['email'],
       website: json['website'],

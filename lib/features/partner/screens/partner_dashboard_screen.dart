@@ -4,14 +4,20 @@ import 'package:flutter/material.dart';
 import 'manage_listings_screen.dart';
 import 'manage_bookings_screen.dart';
 import 'view_statistics_screen.dart';
-import '../models/user.dart'; // We need the user model
-import '../services/api_service.dart'; // And the api service
+import '../models/user.dart';
+import '../services/api_service.dart';
+import '../models/reservation.dart';
+import '../../../theme/AppTheme.dart'; // Import theme for colors
 
 class PartnerDashboardScreen extends StatefulWidget {
-  // The dashboard now requires the logged-in partner's info
   final PartnerUser partner;
+  final String token;
 
-  const PartnerDashboardScreen({super.key, required this.partner});
+  const PartnerDashboardScreen({
+    super.key,
+    required this.partner,
+    required this.token,
+  });
 
   @override
   State<PartnerDashboardScreen> createState() => _PartnerDashboardScreenState();
@@ -19,11 +25,9 @@ class PartnerDashboardScreen extends StatefulWidget {
 
 class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
   final ApiService _apiService = ApiService();
-
   bool _isLoading = true;
   int _totalListings = 0;
   int _pendingBookings = 0;
-  // We can add more stats here, like reviews, revenue, etc.
 
   @override
   void initState() {
@@ -32,33 +36,36 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
   }
 
   Future<void> _fetchDashboardData() async {
+    if (!mounted) return;
     setState(() { _isLoading = true; });
 
     try {
-      // In a real scenario, you'd get the token from secure storage
-      const String fakeToken = 'fake-jwt-token-for-testing';
+      final listingsFuture = _apiService.getActivitiesForPartner(partnerId: widget.partner.id, token: widget.token);
+      final restaurantsFuture = _apiService.getRestaurantsForPartner(partnerId: widget.partner.id, token: widget.token);
+      final bookingsFuture = _apiService.getActivityReservations(widget.token);
+      final restaurantBookingsFuture = _apiService.getRestaurantReservations(widget.token);
 
-      // We will fetch multiple pieces of data in parallel
-      final listingsFuture = _apiService.getActivitiesForPartner(partnerId: widget.partner.id, token: fakeToken);
-      final bookingsFuture = _apiService.getActivityReservations(fakeToken);
+      final results = await Future.wait([listingsFuture, restaurantsFuture, bookingsFuture, restaurantBookingsFuture]);
 
-      final results = await Future.wait([listingsFuture, bookingsFuture]);
+      final activities = results[0] as List;
+      final restaurants = results[1] as List;
+      final activityBookings = results[2] as List<Reservation>;
+      final restaurantBookings = results[3] as List<RestaurantReservation>;
 
-      final listings = results[0] as List;
-      final bookings = results[1] as List;
-
-      setState(() {
-        _totalListings = listings.length;
-        // Filter bookings to find only the pending ones
-        _pendingBookings = bookings.where((b) => b.status == 'pending').length;
-      });
-
+      if (mounted) {
+        setState(() {
+          _totalListings = activities.length + restaurants.length;
+          final pendingActivityBookings = activityBookings.where((b) => b.status == 'pending').length;
+          final pendingRestaurantBookings = restaurantBookings.where((b) => b.status == 'pending').length;
+          _pendingBookings = pendingActivityBookings + pendingRestaurantBookings;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error fetching data: $e")),
-      );
-    } finally {
-      setState(() { _isLoading = false; });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error fetching dashboard data: $e"), backgroundColor: Colors.red));
+        setState(() { _isLoading = false; });
+      }
     }
   }
 
@@ -67,6 +74,12 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text("Welcome, ${widget.partner.fullname}"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _fetchDashboardData,
+          )
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -83,10 +96,14 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
                 context: context,
                 icon: Icons.store,
                 label: 'Manage Listings',
-                // Display the stat we fetched
                 stat: '$_totalListings listings',
                 onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const ManageListingsScreen()));
+                  Navigator.push(context, MaterialPageRoute(
+                      builder: (context) => ManageListingsScreen(
+                        partner: widget.partner,
+                        token: widget.token,
+                      )
+                  ));
                 },
               ),
               _buildDashboardCard(
@@ -95,7 +112,11 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
                 label: 'Manage Bookings',
                 stat: '$_pendingBookings pending',
                 onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const ManageBookingsScreen()));
+                  Navigator.push(context, MaterialPageRoute(
+                      builder: (context) => ManageBookingsScreen(
+                        token: widget.token,
+                      )
+                  ));
                 },
               ),
               _buildDashboardCard(
@@ -110,7 +131,7 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
                 context: context,
                 icon: Icons.reviews,
                 label: 'Manage Reviews',
-                onTap: () {},
+                onTap: () { /* TODO: Navigate to ManageReviewsScreen */ },
               ),
             ],
           ),
@@ -119,7 +140,8 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
     );
   }
 
-  // Helper widget updated to show stats
+  // --- THIS IS THE CORRECTED HELPER METHOD ---
+  // It always returns a Card widget, so it will not cause a null return error.
   Widget _buildDashboardCard({
     required BuildContext context,
     required IconData icon,
@@ -129,12 +151,14 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
   }) {
     return Card(
       elevation: 4.0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            Icon(icon, size: 40, color: Theme.of(context).primaryColor),
+            Icon(icon, size: 40, color: AppTheme.primaryBlue),
             const SizedBox(height: 12),
             Text(
               label,
