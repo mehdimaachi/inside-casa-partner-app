@@ -1,0 +1,91 @@
+name: DevSecOps CI/CD - InsideCasa Full Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  flutter-security:
+    name: Audit sécurité Flutter (analyze, test, secrets)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.4'
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Static analysis
+        run: flutter analyze > flutter-analyze-report.txt || true
+
+      - name: Run unit tests
+        run: flutter test --machine > flutter-test-report.json || true
+
+      - name: Scan secrets with Gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks-linux-amd64 -o gitleaks
+          chmod +x gitleaks
+          ./gitleaks detect --source . --report-path=gitleaks-report.json || true
+
+      - name: Upload Flutter reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-reports
+          path: |
+            flutter-analyze-report.txt
+            flutter-test-report.json
+            gitleaks-report.json
+
+  docker-build-and-scan:
+    name: Build, push and scan Docker image
+    runs-on: ubuntu-latest
+    needs: flutter-security
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.REPO_USER }}
+          password: ${{ secrets.REPO_PWD }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: wangik/insidecasa:latest
+
+      - name: Login to Docker Scout
+        run: echo "${{ secrets.DOCKER_SCOUT_TOKEN }}" | docker login --username "${{ secrets.DOCKER_SCOUT_USER }}" --password-stdin
+
+      - name: Install Docker Scout CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/docker/scout-cli/main/install.sh -o install-scout.sh
+          sh install-scout.sh
+
+      - name: Scan Docker image with Scout
+        run: |
+          docker scout quickview wangik/insidecasa:latest
+          docker scout cves wangik/insidecasa:latest
