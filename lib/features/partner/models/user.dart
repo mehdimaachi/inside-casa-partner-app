@@ -5,32 +5,34 @@ class PartnerUser {
   final String fullname;
   final String email;
   final String phone;
-  final String role; // 'admin'|'customer'|'partner'
+  final String? status;
   final String? description;
-  final DateTime createdAt;
-  final DateTime updatedAt;
+  final String role;
 
   PartnerUser({
     required this.id,
     required this.fullname,
     required this.email,
     required this.phone,
-    required this.role,
+    this.status,
     this.description,
-    required this.createdAt,
-    required this.updatedAt,
+    required this.role,
   });
 
   factory PartnerUser.fromJson(Map<String, dynamic> json) {
     return PartnerUser(
-      id: json['id'],
-      fullname: json['fullname'],
-      email: json['email'],
-      phone: json['phone'],
-      role: json['role'],
+      // --- THIS IS THE FIX ---
+      // We provide a default value (like 0) if the 'id' field is null
+      // in the JSON response. This prevents the crash after an update.
+      id: json['id'] ?? 0,
+
+      // The rest of the safeguards are already in place.
+      fullname: json['fullname'] ?? 'No Name Provided',
+      email: json['email'] ?? 'No Email Provided',
+      phone: json['phone'] ?? 'No Phone Provided',
+      status: json['status'],
       description: json['description'],
-      createdAt: DateTime.parse(json['createdAt']),
-      updatedAt: DateTime.parse(json['updatedAt']),
+      role: json['role'] ?? 'customer',
     );
   }
 }

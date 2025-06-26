@@ -1,21 +1,26 @@
-// In: lib/features/partner/screens/partner_dashboard_screen.dart
-
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
+
 import 'manage_listings_screen.dart';
 import 'manage_bookings_screen.dart';
 import 'view_statistics_screen.dart';
+import 'manage_reviews_screen.dart';
 import '../models/user.dart';
-import '../services/api_service.dart';
+import '../models/activity.dart';
+import '../models/restaurant.dart';
 import '../models/reservation.dart';
-import '../../../theme/AppTheme.dart'; // Import theme for colors
+import '../services/api_service.dart';
+import '../../../theme/AppTheme.dart';
+import './partner_profile_screen.dart';
 
 class PartnerDashboardScreen extends StatefulWidget {
-  final PartnerUser partner;
+  static const routeName = '/partner-dashboard';
+  final PartnerUser user;
   final String token;
 
   const PartnerDashboardScreen({
     super.key,
-    required this.partner,
+    required this.user,
     required this.token,
   });
 
@@ -24,7 +29,6 @@ class PartnerDashboardScreen extends StatefulWidget {
 }
 
 class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
-  final ApiService _apiService = ApiService();
   bool _isLoading = true;
   int _totalListings = 0;
   int _pendingBookings = 0;
@@ -39,109 +43,164 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
     if (!mounted) return;
     setState(() { _isLoading = true; });
 
+    final apiService = ApiService();
+
+    List<Activity> activities = [];
+    List<Restaurant> restaurants = [];
+    List<Reservation> allBookings = [];
+
+    // ÉTAPE 1 : On charge les listings
     try {
-      final listingsFuture = _apiService.getActivitiesForPartner(partnerId: widget.partner.id, token: widget.token);
-      final restaurantsFuture = _apiService.getRestaurantsForPartner(partnerId: widget.partner.id, token: widget.token);
-      final bookingsFuture = _apiService.getActivityReservations(widget.token);
-      final restaurantBookingsFuture = _apiService.getRestaurantReservations(widget.token);
+      final listingResults = await Future.wait([
+        apiService.getActivitiesForPartner(partnerId: widget.user.id, token: widget.token),
+        apiService.getRestaurantsForPartner(partnerId: widget.user.id, token: widget.token),
+      ]);
 
-      final results = await Future.wait([listingsFuture, restaurantsFuture, bookingsFuture, restaurantBookingsFuture]);
+      // --- LA CORRECTION EST ICI : On caste explicitement les types ---
+      activities = listingResults[0] as List<Activity>;
+      restaurants = listingResults[1] as List<Restaurant>;
 
-      final activities = results[0] as List;
-      final restaurants = results[1] as List;
-      final activityBookings = results[2] as List<Reservation>;
-      final restaurantBookings = results[3] as List<RestaurantReservation>;
-
-      if (mounted) {
-        setState(() {
-          _totalListings = activities.length + restaurants.length;
-          final pendingActivityBookings = activityBookings.where((b) => b.status == 'pending').length;
-          final pendingRestaurantBookings = restaurantBookings.where((b) => b.status == 'pending').length;
-          _pendingBookings = pendingActivityBookings + pendingRestaurantBookings;
-          _isLoading = false;
-        });
-      }
     } catch (e) {
+      print("Erreur de chargement des listings : $e");
+    }
+
+    // ÉTAPE 2 : On charge les réservations
+    try {
+      allBookings = await apiService.getBookingsForPartner(partnerId: widget.user.id, token: widget.token);
+    } catch (e) {
+      print("Erreur de chargement des réservations : $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error fetching dashboard data: $e"), backgroundColor: Colors.red));
-        setState(() { _isLoading = false; });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Couldn't load booking data."),
+          backgroundColor: Colors.orange,
+        ));
       }
+    }
+
+    // ÉTAPE 3 : On met à jour l'interface
+    if (mounted) {
+      setState(() {
+        _totalListings = activities.length + restaurants.length;
+        _pendingBookings = allBookings.where((b) => b.status.toLowerCase() == 'pending').length;
+        _isLoading = false;
+      });
     }
   }
 
+  // Le reste du fichier est correct et n'a pas besoin de changer.
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Welcome, ${widget.partner.fullname}"),
+        title: Text("Welcome, ${widget.user.fullname}"),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _fetchDashboardData,
-          )
+            icon: const Icon(Icons.person_outline),
+            tooltip: 'My Profile',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const PartnerProfileScreen(),
+                  settings: RouteSettings(arguments: {'user': widget.user, 'token': widget.token}),
+                ),
+              );
+            },
+          ),
+          if (!_isLoading)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _fetchDashboardData,
+            )
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-        onRefresh: _fetchDashboardData,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: GridView.count(
-            crossAxisCount: 2,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            children: <Widget>[
-              _buildDashboardCard(
-                context: context,
-                icon: Icons.store,
-                label: 'Manage Listings',
-                stat: '$_totalListings listings',
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(
-                      builder: (context) => ManageListingsScreen(
-                        partner: widget.partner,
-                        token: widget.token,
-                      )
-                  ));
-                },
-              ),
-              _buildDashboardCard(
-                context: context,
-                icon: Icons.calendar_today,
-                label: 'Manage Bookings',
-                stat: '$_pendingBookings pending',
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(
-                      builder: (context) => ManageBookingsScreen(
-                        token: widget.token,
-                      )
-                  ));
-                },
-              ),
-              _buildDashboardCard(
-                context: context,
-                icon: Icons.bar_chart,
-                label: 'View Statistics',
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const ViewStatisticsScreen()));
-                },
-              ),
-              _buildDashboardCard(
-                context: context,
-                icon: Icons.reviews,
-                label: 'Manage Reviews',
-                onTap: () { /* TODO: Navigate to ManageReviewsScreen */ },
-              ),
-            ],
-          ),
+      body: _isLoading ? _buildLoadingSkeleton() : _buildDashboardGrid(),
+    );
+  }
+
+  Widget _buildLoadingSkeleton() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey.shade300,
+      highlightColor: Colors.grey.shade100,
+      enabled: true,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: GridView.count(
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          children: List.generate(4, (index) => _buildSkeletonCard()),
         ),
       ),
     );
   }
 
-  // --- THIS IS THE CORRECTED HELPER METHOD ---
-  // It always returns a Card widget, so it will not cause a null return error.
+  Widget _buildSkeletonCard() {
+    return Card(
+      elevation: 4.0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+  }
+
+  Widget _buildDashboardGrid() {
+    return RefreshIndicator(
+      onRefresh: _fetchDashboardData,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: GridView.count(
+          crossAxisCount: 2,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          children: <Widget>[
+            _buildDashboardCard(
+              context: context,
+              icon: Icons.store,
+              label: 'Manage Listings',
+              stat: '$_totalListings listings',
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(
+                    builder: (context) => ManageListingsScreen(
+                      partner: widget.user,
+                      token: widget.token,
+                    )
+                ));
+              },
+            ),
+            _buildDashboardCard(
+              context: context,
+              icon: Icons.calendar_today,
+              label: 'Manage Bookings',
+              stat: '$_pendingBookings pending',
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(
+                    builder: (context) => ManageBookingsScreen(
+                        partner: widget.user,
+                        token: widget.token)
+                ));
+              },
+            ),
+            _buildDashboardCard(
+              context: context,
+              icon: Icons.bar_chart,
+              label: 'View Statistics',
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const ViewStatisticsScreen()));
+              },
+            ),
+            _buildDashboardCard(
+              context: context,
+              icon: Icons.reviews,
+              label: 'Manage Reviews',
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const ManageReviewsScreen()));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildDashboardCard({
     required BuildContext context,
     required IconData icon,

@@ -1,206 +1,121 @@
-// In: lib/features/partner/screens/view_statistics_screen.dart
-
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:fl_chart/fl_chart.dart';
-import '../models/partner_stats.dart';
-import '../services/api_service.dart';
-import '../../../theme/AppTheme.dart';
 
-class ViewStatisticsScreen extends StatefulWidget {
-  const ViewStatisticsScreen({super.key});
+class ViewStatisticsScreen extends StatelessWidget {
+  static const routeName = '/view-statistics';
 
-  @override
-  State<ViewStatisticsScreen> createState() => _ViewStatisticsScreenState();
-}
-
-class _ViewStatisticsScreenState extends State<ViewStatisticsScreen> {
-  final ApiService _apiService = ApiService();
-  final _storage = const FlutterSecureStorage();
-  Future<PartnerStats>? _statsFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _statsFuture = _fetchStats();
-  }
-
-  Future<PartnerStats> _fetchStats() async {
-    final token = await _storage.read(key: 'auth_token');
-    if (token == null) throw Exception("Token not found");
-    return _apiService.getPartnerStats(token);
-  }
+  const ViewStatisticsScreen({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Performance Statistics"),
+        title: const Text('Performance Statistics'),
+        backgroundColor: Theme.of(context).primaryColor,
       ),
-      body: FutureBuilder<PartnerStats>(
-        future: _statsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text("Could not load stats.\n(This is expected if the backend endpoint doesn't exist yet)\n\nError: ${snapshot.error}", textAlign: TextAlign.center),
-            ));
-          }
-          if (!snapshot.hasData) {
-            return const Center(child: Text("No statistics available."));
-          }
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // --- Summary Cards ---
+            _buildStatCard(
+              context: context,
+              icon: Icons.attach_money,
+              label: 'Total Revenue',
+              value: '\$ 1,234.56', // Static placeholder data
+              color: Colors.green.shade600,
+            ),
+            const SizedBox(height: 16),
+            _buildStatCard(
+              context: context,
+              icon: Icons.calendar_today,
+              label: 'Total Bookings',
+              value: '78', // Static placeholder data
+              color: Colors.blue.shade600,
+            ),
+            const SizedBox(height: 16),
+            _buildStatCard(
+              context: context,
+              icon: Icons.star_outline_rounded,
+              label: 'Average Rating',
+              value: '4.7 / 5.0', // Static placeholder data
+              color: Colors.orange.shade600,
+            ),
+            const SizedBox(height: 32),
 
-          final stats = snapshot.data!;
-          return RefreshIndicator(
-            onRefresh: () async {
-              setState(() {
-                _statsFuture = _fetchStats();
-              });
-            },
-            // --- THIS IS THE CORRECTED SECTION ---
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildStatCards(stats),
-                  const SizedBox(height: 24),
-                  const Text("Bookings per Month", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  _buildBarChart(stats.bookingsPerMonth),
-                  const SizedBox(height: 24),
-                  const Text("Top Performing Listings", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  _buildTopListings(stats.topListings),
-                ],
+            // --- Chart Section ---
+            Text(
+              'Monthly Bookings',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const Divider(height: 20, thickness: 1),
+            const SizedBox(height: 10),
+            Container(
+              height: 250,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
               ),
-            ), // The extra "Of)" has been removed here
-          );
-        },
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.bar_chart_rounded, size: 50, color: Colors.grey),
+                    SizedBox(height: 16),
+                    Text(
+                      'Monthly bookings chart will be displayed here.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildStatCards(PartnerStats stats) {
-    return Row(
-      children: [
-        Expanded(
-          child: Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  Text("Total Revenue", style: TextStyle(color: Colors.grey[600])),
-                  const SizedBox(height: 8),
-                  Text("${stats.totalRevenue.toStringAsFixed(2)} MAD", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.primaryBlue)),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  Text("Total Bookings", style: TextStyle(color: Colors.grey[600])),
-                  const SizedBox(height: 8),
-                  Text(stats.totalBookings.toString(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.primaryBlue)),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBarChart(List<MonthlyBooking> data) {
-    if (data.isEmpty) return const Center(child: Padding(padding: EdgeInsets.all(16.0), child: Text("No monthly data available.")));
-    return SizedBox(
-      height: 200,
-      child: BarChart(
-        BarChartData(
-          alignment: BarChartAlignment.spaceAround,
-          barGroups: data.asMap().entries.map((entry) {
-            final index = entry.key;
-            final monthlyData = entry.value;
-            return BarChartGroupData(
-              x: index,
-              barRods: [
-                BarChartRodData(
-                  toY: monthlyData.count.toDouble(),
-                  color: AppTheme.primaryBlue,
-                  width: 16,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(4),
-                    topRight: Radius.circular(4),
+  // A helper widget to build the summary cards for a consistent look.
+  Widget _buildStatCard({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Row(
+          children: [
+            Icon(icon, size: 40, color: color),
+            const SizedBox(width: 20),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
                 ),
               ],
-            );
-          }).toList(),
-          titlesData: FlTitlesData(
-            show: true,
-            leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 38,
-                getTitlesWidget: (double value, TitleMeta meta) {
-                  const style = TextStyle(
-                    color: Colors.grey,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  );
-                  if (value.toInt() >= 0 && value.toInt() < data.length) {
-                    return SideTitleWidget(
-                      axisSide: meta.axisSide,
-                      space: 4,
-                      child: Text(data[value.toInt()].month, style: style),
-                    );
-                  }
-                  return const Text('');
-                },
-              ),
             ),
-          ),
-          borderData: FlBorderData(show: false),
-          gridData: const FlGridData(show: false),
+          ],
         ),
       ),
-    );
-  }
-
-  Widget _buildTopListings(List<ListingPerformance> data) {
-    if (data.isEmpty) return const Center(child: Padding(padding: EdgeInsets.all(16.0), child: Text("No listing performance data available.")));
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: data.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final listing = data[index];
-        return Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: ListTile(
-            title: Text(listing.title),
-            trailing: Text("${listing.bookingCount} bookings", style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        );
-      },
     );
   }
 }

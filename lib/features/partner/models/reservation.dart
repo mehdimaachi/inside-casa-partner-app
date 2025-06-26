@@ -1,73 +1,73 @@
 // In: lib/features/partner/models/reservation.dart
+import 'user.dart';
+import 'activity.dart';
 
-// Corresponds to the 'Reservation' schema in your API for activities
+// --- CLASSE 'RESERVATION' CORRIGÉE ---
+// C'est le modèle principal que nous utilisons pour les réservations unifiées.
 class Reservation {
   final int id;
-  final int userId;
-  final int eventId;
-  final int activityId;
+  final String status;
+  final String reservationDate;
   final int participants;
-  final String status; // 'pending', 'confirmed', 'cancelled'
-  final String paymentStatus;
-  final DateTime createdAt;
+  final String? type;
+  final Activity? activity;
+  final PartnerUser user;
 
   Reservation({
     required this.id,
-    required this.userId,
-    required this.eventId,
-    required this.activityId,
-    required this.participants,
     required this.status,
-    required this.paymentStatus,
-    required this.createdAt,
+    required this.reservationDate,
+    required this.participants,
+    this.type,
+    this.activity,
+    required this.user,
   });
 
+  /// Factory constructor to create a Reservation from a JSON map.
+  /// CETTE VERSION EST MAINTENANT CORRECTE ET ROBUSTE.
   factory Reservation.fromJson(Map<String, dynamic> json) {
     return Reservation(
-      id: json['id'],
-      userId: json['user_id'],
-      eventId: json['event_id'],
-      activityId: json['activity_id'],
-      participants: json['participants'],
-      status: json['status'],
-      paymentStatus: json['payment_status'],
-      createdAt: DateTime.parse(json['createdAt']),
+      // On ajoute des valeurs par défaut pour tout pour éviter les crashes.
+      id: json['id'] ?? 0,
+      status: json['status'] ?? 'pending',
+      reservationDate: json['reservation_date'] ?? '',
+      participants: json['participants'] ?? 0,
+      type: json['type'], // Le type peut être null, c'est ok.
+
+      // On parse l'objet 'activity' s'il existe.
+      activity: json['activity'] != null
+          ? Activity.fromJson(json['activity'])
+          : null,
+
+      // On parse l'objet 'user', en s'assurant qu'il n'est jamais null.
+      user: json['user'] != null
+          ? PartnerUser.fromJson(json['user'])
+          : PartnerUser(id: 0, fullname: 'Unknown User', email: '', phone: '', role: 'customer'),
     );
   }
 }
 
-// Corresponds to the 'RestaurantReservation' schema in your API
+// --- CLASSE 'RESTAURANTRESERVATION' ---
+// Ce modèle est conservé tel quel, car il est différent (utilise DateTime, guests).
 class RestaurantReservation {
   final int id;
-  final int userId;
-  final int restaurantId;
-  final DateTime reservationDate;
-  final String reservationTime;
-  final int guests;
   final String status;
-  final DateTime createdAt;
+  final DateTime reservationDate;
+  final int guests;
 
   RestaurantReservation({
     required this.id,
-    required this.userId,
-    required this.restaurantId,
-    required this.reservationDate,
-    required this.reservationTime,
-    required this.guests,
     required this.status,
-    required this.createdAt,
+    required this.reservationDate,
+    required this.guests,
   });
 
   factory RestaurantReservation.fromJson(Map<String, dynamic> json) {
     return RestaurantReservation(
-      id: json['id'],
-      userId: json['user_id'],
-      restaurantId: json['restaurant_id'],
-      reservationDate: DateTime.parse(json['reservation_date']),
-      reservationTime: json['reservation_time'],
-      guests: json['guests'],
-      status: json['status'],
-      createdAt: DateTime.parse(json['createdAt']),
+      id: json['id'] ?? 0,
+      status: json['status'] ?? 'pending',
+      reservationDate: json['reservation_date'] != null ? DateTime.parse(json['reservation_date']) : DateTime.now(),
+      guests: json['number_of_guests'] ?? 0,
     );
   }
 }

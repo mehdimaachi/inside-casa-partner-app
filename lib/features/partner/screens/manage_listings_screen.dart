@@ -1,5 +1,3 @@
-// In: lib/features/partner/screens/manage_listings_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:inside_casa_app/theme/AppTheme.dart'; // Import for colors
 import 'activity_form_screen.dart';
@@ -9,7 +7,6 @@ import '../models/restaurant.dart';
 import '../models/user.dart';
 
 class ManageListingsScreen extends StatefulWidget {
-  // --- UPDATED: It now requires the partner and token to be passed in ---
   final PartnerUser partner;
   final String token;
 
@@ -25,36 +22,27 @@ class ManageListingsScreen extends StatefulWidget {
 
 class _ManageListingsScreenState extends State<ManageListingsScreen> {
   final ApiService _apiService = ApiService();
-  Future<List<Object>>? _listingsFuture;
+  // On utilise des Futures séparés pour chaque type de données
+  late Future<List<Activity>> _activitiesFuture;
+  late Future<List<Restaurant>> _restaurantsFuture;
+  final Map<int, bool> _isTogglingPromotion = {};
 
   @override
   void initState() {
     super.initState();
-    _listingsFuture = _fetchListings();
+    _fetchListings();
   }
 
-  Future<List<Object>> _fetchListings() async {
-    // --- THE FIX: Uses passed-in widget data, no longer reads from storage ---
-    try {
-      final activitiesFuture = _apiService.getActivitiesForPartner(
-        partnerId: widget.partner.id,
-        token: widget.token,
-      );
-      final restaurantsFuture = _apiService.getRestaurantsForPartner(
-        partnerId: widget.partner.id,
-        token: widget.token,
-      );
-      final results = await Future.wait([activitiesFuture, restaurantsFuture]);
-      return [...results[0] as List<Activity>, ...results[1] as List<Restaurant>];
-    } catch (e) {
-      // Re-throw the error so the FutureBuilder can display it
-      throw Exception(e);
-    }
+  void _fetchListings() {
+    setState(() {
+      _activitiesFuture = _apiService.getActivitiesForPartner(
+          partnerId: widget.partner.id, token: widget.token);
+      _restaurantsFuture = _apiService.getRestaurantsForPartner(
+          partnerId: widget.partner.id, token: widget.token);
+    });
   }
 
-  // --- UPDATED: This navigation method now uses passed-in widget data ---
   void _navigateToForm({Activity? activityToEdit}) async {
-    // We await the result. The form screen will pop 'true' on a successful save.
     final bool? shouldRefresh = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -65,39 +53,29 @@ class _ManageListingsScreenState extends State<ManageListingsScreen> {
         ),
       ),
     );
-
-    // If the form was saved successfully, refresh the list.
     if (shouldRefresh == true) {
-      setState(() {
-        _listingsFuture = _fetchListings();
-      });
+      _fetchListings();
     }
   }
 
-  // --- UPDATED: The delete function now uses passed-in widget data ---
-  Future<void> _deleteListing(Object item) async {
+  Future<void> _deleteListing(dynamic item) async {
     try {
       final int id = (item is Activity) ? item.id! : (item as Restaurant).id;
       final bool isRestaurant = item is Restaurant;
-      final String itemName = (item is Activity) ? item.title : (item as Restaurant).name;
-
       await _apiService.deleteListing(widget.token, id, isRestaurant: isRestaurant);
 
-      if(!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"$itemName" was deleted successfully.'), backgroundColor: Colors.green),
+        SnackBar(content: Text('Listing deleted successfully.'), backgroundColor: Colors.green),
       );
-      setState(() { _listingsFuture = _fetchListings(); });
-
+      _fetchListings();
     } catch (e) {
-      if(!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.red),
       );
     }
   }
 
-  void _showDeleteConfirmation(Object item) {
+  void _showDeleteConfirmation(dynamic item) {
     final String itemName = (item is Activity) ? item.title : (item as Restaurant).name;
     showDialog(
       context: context,
@@ -124,50 +102,57 @@ class _ManageListingsScreenState extends State<ManageListingsScreen> {
     );
   }
 
+  Future<void> _togglePromotion(dynamic item) async {
+    final int id = item.id!;
+    setState(() => _isTogglingPromotion[id] = true);
+
+    try {
+      await _apiService.togglePromotionStatus(widget.token, id);
+      _fetchListings(); // Rafraîchit les données pour mettre à jour l'UI
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update promotion: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isTogglingPromotion.remove(id));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Manage Your Listings")),
-      body: FutureBuilder<List<Object>>(
-        future: _listingsFuture,
-        builder: (context, snapshot) {
+      body: FutureBuilder(
+        future: Future.wait([_activitiesFuture, _restaurantsFuture]),
+        builder: (context, AsyncSnapshot<List<List<dynamic>>> snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text("Error: ${snapshot.error}", textAlign: TextAlign.center)));
+            return Center(child: Text("Error fetching listings: ${snapshot.error}"));
           }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          if (!snapshot.hasData) {
+            return const Center(child: Text("No listings found."));
+          }
+
+          // On caste explicitement les résultats pour garantir la sécurité des types
+          final List<Activity> activities = snapshot.data![0].cast<Activity>();
+          final List<Restaurant> restaurants = snapshot.data![1].cast<Restaurant>();
+          final List<dynamic> combinedList = [...activities, ...restaurants];
+
+          if (combinedList.isEmpty) {
             return const Center(child: Text("You haven't created any listings yet."));
           }
-          final listings = snapshot.data!;
+
           return RefreshIndicator(
-            onRefresh: () async { setState(() { _listingsFuture = _fetchListings(); }); },
+            onRefresh: () async => _fetchListings(),
             child: ListView.builder(
-              itemCount: listings.length,
+              itemCount: combinedList.length,
               itemBuilder: (context, index) {
-                final item = listings[index];
-                if (item is Activity) {
-                  return _buildListingCard(
-                    icon: Icons.directions_walk,
-                    title: item.title,
-                    subtitle: "Activity: ${item.price} MAD",
-                    onEdit: () => _navigateToForm(activityToEdit: item),
-                    onDelete: () => _showDeleteConfirmation(item),
-                  );
-                }
-                if (item is Restaurant) {
-                  return _buildListingCard(
-                    icon: Icons.restaurant,
-                    title: item.name,
-                    subtitle: "Restaurant: ${item.address}",
-                    onEdit: () {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Editing restaurants is not yet implemented.")));
-                    },
-                    onDelete: () => _showDeleteConfirmation(item),
-                  );
-                }
-                return const SizedBox.shrink();
+                final item = combinedList[index];
+                return _buildListingCard(item);
               },
             ),
           );
@@ -181,24 +166,47 @@ class _ManageListingsScreenState extends State<ManageListingsScreen> {
     );
   }
 
-  Widget _buildListingCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onEdit,
-    required VoidCallback onDelete,
-  }) {
+  Widget _buildListingCard(dynamic item) {
+    final isActivity = item is Activity;
+    final id = item.id!;
+    final title = isActivity ? item.title : (item as Restaurant).name;
+    final subtitle = isActivity ? "Activity: ${item.price} MAD" : "Restaurant: ${item.address}";
+    final icon = isActivity ? Icons.directions_walk : Icons.restaurant;
+    final isPromoted = item.isPromoted ?? false;
+    final isToggling = _isTogglingPromotion[id] ?? false;
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: ListTile(
         leading: Icon(icon, color: AppTheme.primaryBlue),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Row(
+          children: [
+            if (isPromoted) const Icon(Icons.star, color: Colors.amber, size: 20),
+            if (isPromoted) const SizedBox(width: 8),
+            Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold))),
+          ],
+        ),
         subtitle: Text(subtitle),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: onEdit),
-            IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: onDelete),
+            if (isToggling)
+              const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+            else
+              Switch(
+                value: isPromoted,
+                onChanged: (value) => _togglePromotion(item),
+                activeTrackColor: Colors.amber.withOpacity(0.5),
+                activeColor: Colors.amber,
+              ),
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.blue),
+              onPressed: () => isActivity ? _navigateToForm(activityToEdit: item) : null,
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () => _showDeleteConfirmation(item),
+            ),
           ],
         ),
       ),

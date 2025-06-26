@@ -1,17 +1,17 @@
-// In: lib/features/partner/screens/manage_bookings_screen.dart
-
 import 'package:flutter/material.dart';
 import '../models/reservation.dart';
 import '../services/api_service.dart';
+import '../models/user.dart';
 
 class ManageBookingsScreen extends StatefulWidget {
-  // --- UPDATED: It now requires the token to be passed in ---
   final String token;
+  final PartnerUser partner;
 
   const ManageBookingsScreen({
-    super.key,
+    Key? key,
     required this.token,
-  });
+    required this.partner,
+  }) : super(key: key);
 
   @override
   State<ManageBookingsScreen> createState() => _ManageBookingsScreenState();
@@ -19,118 +19,104 @@ class ManageBookingsScreen extends StatefulWidget {
 
 class _ManageBookingsScreenState extends State<ManageBookingsScreen> with SingleTickerProviderStateMixin {
   final ApiService _apiService = ApiService();
-  late TabController _tabController;
+  TabController? _tabController; // Le TabController est maintenant nullable
 
-  Future<void>? _fetchFuture;
+  late Future<List<Reservation>> _fetchFuture;
 
-  List<Object> _allBookings = [];
-  List<Object> _pending = [];
-  List<Object> _confirmed = [];
-  List<Object> _cancelled = [];
-
+  // Plus besoin de listes séparées dans l'état, elles seront générées à la volée
   bool _isUpdating = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _fetchFuture = _fetchAndCategorizeBookings();
+    // On ne crée le TabController que lorsque les données sont prêtes
+    _fetchFuture = _fetchBookings();
   }
 
-  Future<void> _fetchAndCategorizeBookings() async {
-    // --- THE FIX: Uses passed-in widget.token, no longer reads from storage ---
-    try {
-      final activityBookingsFuture = _apiService.getActivityReservations(widget.token);
-      final restaurantBookingsFuture = _apiService.getRestaurantReservations(widget.token);
-
-      final results = await Future.wait([activityBookingsFuture, restaurantBookingsFuture]);
-
-      final allBookings = [...results[0], ...results[1]];
-
-      if (mounted) {
-        setState(() {
-          _allBookings = allBookings;
-          _pending = _allBookings.where((b) => _getStatus(b) == 'pending').toList();
-          _confirmed = _allBookings.where((b) => _getStatus(b) == 'confirmed').toList();
-          _cancelled = _allBookings.where((b) => _getStatus(b) == 'cancelled').toList();
-        });
-      }
-    } catch (e) {
-      rethrow;
-    }
+  Future<List<Reservation>> _fetchBookings() {
+    return _apiService.getBookingsForPartner(
+      partnerId: widget.partner.id,
+      token: widget.token,
+    );
   }
 
-  String _getStatus(Object booking) {
-    if (booking is Reservation) return booking.status;
-    if (booking is RestaurantReservation) return booking.status;
-    return '';
-  }
-
-  Future<void> _updateStatus(Object booking, String newStatus) async {
+  Future<void> _updateStatus(Reservation booking, String newStatus) async {
     setState(() { _isUpdating = true; });
-
     try {
-      // --- THE FIX: Uses passed-in widget.token ---
-      int id = (booking is Reservation) ? booking.id : (booking as RestaurantReservation).id;
-      bool isRestaurant = booking is RestaurantReservation;
-
-      await _apiService.updateReservationStatus(widget.token, id, newStatus, isRestaurant: isRestaurant);
-
-      if (!mounted) return;
+      await _apiService.updateReservationStatus(
+        widget.token,
+        booking.id,
+        newStatus,
+        isRestaurant: booking.type == 'restaurant',
+      );
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Booking updated to $newStatus')));
-
-      await _fetchAndCategorizeBookings();
-
+      // On relance simplement le fetch pour rafraîchir les données
+      setState(() {
+        _fetchFuture = _fetchBookings();
+      });
     } catch (e) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     } finally {
-      if(mounted) {
-        setState(() { _isUpdating = false; });
-      }
+      if(mounted) setState(() { _isUpdating = false; });
     }
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    // On s'assure que le controller est disposé s'il a été créé
+    _tabController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Manage Bookings"),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(text: "Pending (${_pending.length})"),
-            Tab(text: "Confirmed (${_confirmed.length})"),
-            Tab(text: "Cancelled (${_cancelled.length})"),
-          ],
-        ),
-      ),
-      body: FutureBuilder(
-        future: _fetchFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text("Error fetching bookings.\n\nDetails: ${snapshot.error}", textAlign: TextAlign.center)));
-          }
+    return FutureBuilder<List<Reservation>>(
+      future: _fetchFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            appBar: AppBar(title: const Text("Manage Bookings")),
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            appBar: AppBar(title: const Text("Manage Bookings")),
+            body: Center(child: Text("Error fetching bookings: ${snapshot.error}")),
+          );
+        }
 
-          return AbsorbPointer(
+        // Les données sont chargées avec succès
+        final allBookings = snapshot.data ?? [];
+        final pending = allBookings.where((b) => b.status == 'pending').toList();
+        final confirmed = allBookings.where((b) => b.status == 'confirmed').toList();
+        final cancelled = allBookings.where((b) => b.status == 'cancelled').toList();
+
+        // On initialise le TabController ici, avec le State du Builder
+        _tabController ??= TabController(length: 3, vsync: this);
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text("Manage Bookings"),
+            bottom: TabBar(
+              controller: _tabController,
+              tabs: [
+                Tab(text: "Pending (${pending.length})"),
+                Tab(text: "Confirmed (${confirmed.length})"),
+                Tab(text: "Cancelled (${cancelled.length})"),
+              ],
+            ),
+          ),
+          body: AbsorbPointer(
             absorbing: _isUpdating,
             child: Stack(
               children: [
                 TabBarView(
                   controller: _tabController,
                   children: [
-                    _buildBookingList(_pending, isPending: true),
-                    _buildBookingList(_confirmed),
-                    _buildBookingList(_cancelled),
+                    _buildBookingList(pending, isPending: true),
+                    _buildBookingList(confirmed),
+                    _buildBookingList(cancelled),
                   ],
                 ),
                 if (_isUpdating)
@@ -140,18 +126,26 @@ class _ManageBookingsScreenState extends State<ManageBookingsScreen> with Single
                   ),
               ],
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildBookingList(List<Object> bookings, {bool isPending = false}) {
+  Widget _buildBookingList(List<Reservation> bookings, {bool isPending = false}) {
     if (bookings.isEmpty) {
-      return const Center(child: Text('No bookings in this category.'));
+      return RefreshIndicator(
+          onRefresh: () async => setState(() { _fetchFuture = _fetchBookings(); }),
+          child: ListView( // Utiliser un ListView pour que le RefreshIndicator fonctionne toujours
+            children: const [
+              SizedBox(height: 100),
+              Center(child: Text('No bookings in this category.')),
+            ],
+          )
+      );
     }
     return RefreshIndicator(
-      onRefresh: _fetchAndCategorizeBookings,
+      onRefresh: () async => setState(() { _fetchFuture = _fetchBookings(); }),
       child: ListView.builder(
         itemCount: bookings.length,
         itemBuilder: (context, index) {
@@ -162,18 +156,9 @@ class _ManageBookingsScreenState extends State<ManageBookingsScreen> with Single
     );
   }
 
-  Widget _buildBookingCard(Object booking, {bool isPending = false}) {
-    String title, subtitle;
-
-    if (booking is Reservation) {
-      title = 'Activity Booking #${booking.id}';
-      subtitle = '${booking.participants} participants';
-    } else if (booking is RestaurantReservation) {
-      title = 'Restaurant Booking #${booking.id}';
-      subtitle = '${booking.guests} guests on ${booking.reservationDate.toLocal().toString().split(' ')[0]}';
-    } else {
-      return const SizedBox.shrink();
-    }
+  Widget _buildBookingCard(Reservation booking, {bool isPending = false}) {
+    String title = 'Booking #${booking.id}';
+    String subtitle = 'For: ${booking.activity?.title ?? 'N/A'}\nCustomer: ${booking.user.fullname}';
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

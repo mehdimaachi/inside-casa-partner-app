@@ -3,52 +3,26 @@
 class Restaurant {
   final int id;
   final String name;
-  final String description;
   final String address;
-  final double latitude;
-  final double longitude;
   final String phone;
-  final String email;
-  final String? website;
-  final List<String> imageUrls;
-  final bool isActive;
-  final int categoryId;
-  final int partnerId;
+  final bool isPromoted;
 
   Restaurant({
     required this.id,
     required this.name,
-    required this.description,
     required this.address,
-    required this.latitude,
-    required this.longitude,
     required this.phone,
-    required this.email,
-    this.website,
-    required this.imageUrls,
-    required this.isActive,
-    required this.categoryId,
-    required this.partnerId,
+    this.isPromoted = false,
   });
-
-// In: lib/features/partner/models/restaurant.dart
 
   factory Restaurant.fromJson(Map<String, dynamic> json) {
     return Restaurant(
-      id: json['id'],
-      name: json['name'],
-      description: json['description'],
-      address: json['address'],
-      // THE FIX: Parse from a string to a double.
-      latitude: double.parse(json['latitude'].toString()),
-      longitude: double.parse(json['longitude'].toString()),
-      phone: json['phone'],
-      email: json['email'],
-      website: json['website'],
-      imageUrls: List<String>.from(json['image_urls']),
-      isActive: json['is_active'],
-      categoryId: json['category_id'],
-      partnerId: json['partner_id'],
+      // On s'assure que même si l'ID est null, on ne fait pas planter l'app
+      id: json['id'] ?? 0,
+      name: json['name'] ?? 'No Name Provided',
+      address: json['address'] ?? 'No Address Provided',
+      phone: json['phone'] ?? 'No Phone Provided',
+      isPromoted: json['is_promoted'] ?? false,
     );
   }
 }

@@ -1,14 +1,14 @@
-// In: lib/features/partner/screens/partner_login_screen.dart
-
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'partner_dashboard_screen.dart'; // The main dashboard screen
-import '../services/api_service.dart';
-import '../models/user.dart';
-// We ONLY need to import the central theme file now
-import 'package:inside_casa_app/theme/AppTheme.dart';
+// REMOVED: import 'package:provider/provider.dart'; // This is no longer needed.
+
+import '../../screens/partner_dashboard_screen.dart';
+import '../../services/api_service.dart';
+import '../../models/user.dart';
+import './partner_registration_screen.dart';
+import '../../../../theme/AppTheme.dart';
 
 class PartnerLoginScreen extends StatefulWidget {
+  static const routeName = '/partner-login';
   const PartnerLoginScreen({super.key});
 
   @override
@@ -20,9 +20,6 @@ class _PartnerLoginScreenState extends State<PartnerLoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  final _apiService = ApiService();
-  final _storage = const FlutterSecureStorage();
-
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -33,8 +30,6 @@ class _PartnerLoginScreenState extends State<PartnerLoginScreen> {
     super.dispose();
   }
 
-// In: partner_login_screen.dart
-
   Future<void> _performLogin() async {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
@@ -44,10 +39,12 @@ class _PartnerLoginScreenState extends State<PartnerLoginScreen> {
       _errorMessage = null;
     });
 
-    // --- THIS IS THE REAL, LIVE LOGIC ---
     try {
-      // 1. Call the real ApiService with the user's input
-      final result = await _apiService.login(
+      // --- THIS IS THE CORRECTED LINE ---
+      // We create the ApiService directly, without using Provider.
+      final apiService = ApiService();
+
+      final result = await apiService.login(
         _emailController.text,
         _passwordController.text,
       );
@@ -55,35 +52,21 @@ class _PartnerLoginScreenState extends State<PartnerLoginScreen> {
       final PartnerUser user = result['user'];
       final String token = result['token'];
 
-      // 2. Add a security check: only allow 'partner' roles to log in
-      if (user.role != 'partner') {
-        throw Exception("Access Denied. Only partners can log in here.");
-      }
-
-      // 3. Store the real token and user info
-      await _storage.write(key: 'auth_token', value: token);
-      await _storage.write(key: 'user_id', value: user.id.toString());
-      await _storage.write(key: 'partner_name', value: user.fullname);
-
-      // 4. Navigate to the dashboard if login is successful
       if (!mounted) return;
-      // Navigate to the dashboard, passing the user object AND the token
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (context) => PartnerDashboardScreen(
-            partner: user,
-            token: token, // Pass the token as well
-          ),
+          builder: (context) => PartnerDashboardScreen(user: user, token: token),
         ),
       );
 
     } catch (e) {
-      // This will now catch real errors from the server!
-      setState(() {
-        _errorMessage = e.toString().replaceFirst("Exception: ", "");
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceFirst('Exception: ', '');
+        });
+      }
     } finally {
-      if(mounted) {
+      if (mounted) {
         setState(() {
           _isLoading = false;
         });
@@ -93,8 +76,8 @@ class _PartnerLoginScreenState extends State<PartnerLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // The rest of your build method is correct and does not need to be changed.
     return Scaffold(
-      // The scaffold's background color is now controlled by the global theme in main.dart
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -105,45 +88,36 @@ class _PartnerLoginScreenState extends State<PartnerLoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // 1. Logo
                   Image.asset(
                     'images/LogoInsideCasa.png',
                     height: 60,
                   ),
                   const SizedBox(height: 32),
-
-                  // 2. Welcome Text
                   const Text(
                     'Bienvenue',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  // --- FIXED: Using AppTheme.lightText instead of AppColors ---
                   Text(
                     'Connecte-toi pour gérer ton espace partenaire !',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16, color: AppTheme.lightText), // Corrected
+                    style: TextStyle(fontSize: 16, color: AppTheme.lightText),
                   ),
                   const SizedBox(height: 40),
-
-                  // 3. Email Field - The style is applied automatically by the theme in main.dart
                   TextFormField(
                     controller: _emailController,
-                    decoration: const InputDecoration( // 'const' is fine here
+                    decoration: const InputDecoration(
                       hintText: 'Adresse email',
-                      // The prefixIconColor is now set globally in AppTheme.dart
                       prefixIcon: Icon(Icons.email_outlined),
                     ),
                     keyboardType: TextInputType.emailAddress,
                     validator: (value) => (value == null || !value.contains('@')) ? 'Veuillez entrer un email valide' : null,
                   ),
                   const SizedBox(height: 16),
-
-                  // 4. Password Field - The style is applied automatically by the theme
                   TextFormField(
                     controller: _passwordController,
-                    decoration: const InputDecoration( // 'const' is fine here
+                    decoration: const InputDecoration(
                       hintText: 'Mot de passe',
                       prefixIcon: Icon(Icons.lock_outline),
                     ),
@@ -151,21 +125,30 @@ class _PartnerLoginScreenState extends State<PartnerLoginScreen> {
                     validator: (value) => (value == null || value.length < 6) ? 'Le mot de passe doit contenir au moins 6 caractères' : null,
                   ),
                   const SizedBox(height: 24),
-
-                  // Error message
                   if (_errorMessage != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16.0),
                       child: Text(_errorMessage!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                     ),
-
-                  // 5. Login Button - The style is applied automatically by the theme
                   ElevatedButton(
                     onPressed: _isLoading ? null : _performLogin,
                     child: _isLoading
                         ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                         : const Text('Connexion'),
                   ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text("Don't have an account?"),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pushNamed(PartnerRegistrationScreen.routeName);
+                        },
+                        child: const Text('Register Here'),
+                      ),
+                    ],
+                  )
                 ],
               ),
             ),
