@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart';
 import 'package:async/async.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 // Import all your models
 import '../models/activity.dart';
@@ -125,6 +126,20 @@ class ApiService {
     }
   }
 
+  Future<List<Reservation>> getPartnerReservations({String status = 'all'}) async {
+    try {
+      final token = await getStoredToken();
+      // Vous pouvez récupérer l'ID du partenaire depuis le token ou le stocker ailleurs
+      final user = await getMyProfile(token);
+      return await getBookingsForPartner(
+          partnerId: user.id ?? 0,
+          token: token
+      );
+    } catch (e) {
+      throw Exception('Error fetching reservations: $e');
+    }
+  }
+
   // --- LISTING & ACTIVITY MANAGEMENT ---
 
   Future<List<Activity>> getActivitiesForPartner({required int partnerId, required String token}) async {
@@ -140,6 +155,30 @@ class ApiService {
     }
   }
 
+  // --- STATISTICS & ANALYTICS ---
+
+  // Méthode ajoutée pour les statistiques partenaires
+  Future<PartnerStats> getPartnerStatistics() async {
+    try {
+      // Récupérer le token depuis le stockage sécurisé
+      final token = await getStoredToken();
+
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/partner/stats'),
+        headers: _getAuthHeaders(token),
+      );
+
+      if (response.statusCode == 200) {
+        return PartnerStats.fromJson(jsonDecode(response.body));
+      } else {
+        throw Exception('Failed to load partner statistics. Status: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error retrieving partner statistics: $e');
+    }
+  }
+
+  // Cette méthode peut être utilisée par la nouvelle méthode ci-dessus
   Future<PartnerStats> getPartnerStats(String token) async {
     final response = await http.get(
       Uri.parse('$_baseUrl/api/partner/stats'),
@@ -150,6 +189,16 @@ class ApiService {
     } else {
       throw Exception('Failed to load partner statistics');
     }
+  }
+
+  // Utilitaire pour récupérer le token stocké
+  Future<String> getStoredToken() async {
+    const secureStorage = FlutterSecureStorage();
+    final token = await secureStorage.read(key: 'jwt_token');
+    if (token == null) {
+      throw Exception('No authentication token found. Please login again.');
+    }
+    return token;
   }
 
   Future<List<Restaurant>> getRestaurantsForPartner({required int partnerId, required String token}) async {
@@ -273,15 +322,17 @@ class ApiService {
     }
   }
 
-  Future<void> updateReservationStatus(String token, int reservationId, String newStatus, {bool isRestaurant = false}) async {
-    final endpoint = isRestaurant ? 'restaurantreservations' : 'reservations';
-    final response = await http.put(
-      Uri.parse('$_baseUrl/api/$endpoint/$reservationId'),
-      headers: _getAuthHeaders(token),
-      body: jsonEncode({'status': newStatus}),
-    );
-    if (response.statusCode != 200) {
-      throw Exception('Failed to update reservation status');
+  Future<bool> updateReservationStatus(String token, int reservationId, String newStatus, {bool isRestaurant = false}) async {
+    try {
+      final endpoint = isRestaurant ? 'restaurantreservations' : 'reservations';
+      final response = await http.put(
+        Uri.parse('$_baseUrl/api/$endpoint/$reservationId'),
+        headers: _getAuthHeaders(token),
+        body: jsonEncode({'status': newStatus}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      throw Exception('Failed to update reservation status: $e');
     }
   }
 
@@ -311,14 +362,51 @@ class ApiService {
 
   // --- REVIEW MANAGEMENT ---
 
-  Future<List<ActivityReview>> getActivityReviews(String token, {required int activityId}) async {
+  Future<List<Review>> getActivityReviews(String token, {required int activityId}) async {
     final uri = Uri.parse('$_baseUrl/api/activityreviews').replace(queryParameters: {'activityId': activityId.toString()});
     final response = await http.get(uri, headers: _getAuthHeaders(token));
     if (response.statusCode == 200) {
       List<dynamic> body = jsonDecode(response.body);
-      return body.map((dynamic item) => ActivityReview.fromJson(item)).toList();
+      return body.map((dynamic item) => Review.fromJson(item)).toList();
     } else {
       throw Exception('Failed to load activity reviews');
     }
   }
+
+  // Récupérer tous les avis du partenaire
+  Future<List<Review>> getPartnerReviews() async {
+    try {
+      final token = await getStoredToken();
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/partner/reviews'),
+        headers: _getAuthHeaders(token),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data.map((json) => Review.fromJson(json)).toList();
+      } else {
+        throw Exception('Failed to load reviews: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error fetching reviews: $e');
+    }
+  }
+
+  // Répondre à un avis
+  Future<bool> replyToReview(int reviewId, String replyText) async {
+    try {
+      final token = await getStoredToken();
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/partner/reviews/$reviewId/reply'),
+        headers: _getAuthHeaders(token),
+        body: json.encode({'reply_text': replyText}),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      throw Exception('Error replying to review: $e');
+    }
+  }
 }
+

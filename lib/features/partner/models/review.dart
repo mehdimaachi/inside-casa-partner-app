@@ -1,70 +1,82 @@
-// In: lib/features/partner/models/review.dart
-
-// Corresponds to the 'ActivityReview' schema in your API
-class ActivityReview {
+// Fichier: lib/features/partner/models/review.dart
+class Review {
   final int id;
-  final int userId;
-  final int activityId;
-  final int rating; // 1-5
+  final int rating;
   final String comment;
-  final DateTime createdAt;
-  // It's very useful if the API can also send the user's name
-  // final String? userName;
+  final String userName;
+  final DateTime date;
+  final String activityName;
+  final bool replied;
+  final String? replyText;
 
-  ActivityReview({
+  Review({
     required this.id,
-    required this.userId,
-    required this.activityId,
     required this.rating,
     required this.comment,
-    required this.createdAt,
-    // this.userName,
+    required this.userName,
+    required this.date,
+    required this.activityName,
+    this.replied = false,
+    this.replyText,
   });
 
-  factory ActivityReview.fromJson(Map<String, dynamic> json) {
-    return ActivityReview(
-      id: json['id'],
-      userId: json['user_id'],
-      activityId: json['activity_id'],
-      rating: json['rating'],
-      comment: json['comment'],
-      createdAt: DateTime.parse(json['createdAt']),
-      // Example of how to parse if the backend includes user info
-      // userName: json['user'] != null ? json['user']['fullname'] : 'Anonymous',
+  factory Review.fromJson(Map<String, dynamic> json) {
+    DateTime parseDate(dynamic date) {
+      if (date == null) return DateTime.now();
+
+      if (date is String) {
+        try {
+          return DateTime.parse(date);
+        } catch (_) {}
+      }
+
+      return DateTime.now();
+    }
+
+    return Review(
+      id: json['id'] ?? 0,
+      rating: json['rating'] ?? 0,
+      comment: json['comment'] ?? '',
+      userName: json['user_name'] ?? 'Anonymous',
+      date: parseDate(json['date']),
+      activityName: json['activity_name'] ?? 'Unknown Activity',
+      replied: json['replied'] ?? false,
+      replyText: json['reply_text'],
     );
   }
-}
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'rating': rating,
+      'comment': comment,
+      'user_name': userName,
+      'date': date.toIso8601String(),
+      'activity_name': activityName,
+      'replied': replied,
+      'reply_text': replyText,
+    };
+  }
 
-// Corresponds to the 'RestaurantReview' schema in your API
-class RestaurantReview {
-  final int id;
-  final int userId;
-  final int restaurantId;
-  final int rating; // 1-5
-  final String comment;
-  final DateTime createdAt;
-  // final String? userName;
-
-  RestaurantReview({
-    required this.id,
-    required this.userId,
-    required this.restaurantId,
-    required this.rating,
-    required this.comment,
-    required this.createdAt,
-    // this.userName,
-  });
-
-  factory RestaurantReview.fromJson(Map<String, dynamic> json) {
-    return RestaurantReview(
-      id: json['id'],
-      userId: json['user_id'],
-      restaurantId: json['restaurant_id'],
-      rating: json['rating'],
-      comment: json['comment'],
-      createdAt: DateTime.parse(json['createdAt']),
-      // userName: json['user'] != null ? json['user']['fullname'] : 'Anonymous',
+  Review copyWith({
+    int? id,
+    int? rating,
+    String? comment,
+    String? userName,
+    DateTime? date,
+    String? activityName,
+    bool? replied,
+    String? replyText,
+  }) {
+    return Review(
+      id: id ?? this.id,
+      rating: rating ?? this.rating,
+      comment: comment ?? this.comment,
+      userName: userName ?? this.userName,
+      date: date ?? this.date,
+      activityName: activityName ?? this.activityName,
+      replied: replied ?? this.replied,
+      replyText: replyText ?? this.replyText,
     );
   }
 }

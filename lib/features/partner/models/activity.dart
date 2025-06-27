@@ -65,4 +65,20 @@ class Activity {
       updatedAt: json['updatedAt'] != null ? DateTime.parse(json['updatedAt']) : null,
     );
   }
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'location': location,
+      'latitude': latitude,
+      'longitude': longitude,
+      'price': price,
+      'duration': duration,
+      'is_active': isActive,
+      'image_urls': imageUrls,
+      'category_id': categoryId,
+      'partner_id': partnerId,
+    };
+  }
 }

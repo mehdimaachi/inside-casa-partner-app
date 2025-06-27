@@ -60,7 +60,7 @@ class _ManageListingsScreenState extends State<ManageListingsScreen> {
 
   Future<void> _deleteListing(dynamic item) async {
     try {
-      final int id = (item is Activity) ? item.id! : (item as Restaurant).id;
+      final int id = (item is Activity) ? item.id! : (item as Restaurant).id!;
       final bool isRestaurant = item is Restaurant;
       await _apiService.deleteListing(widget.token, id, isRestaurant: isRestaurant);
 

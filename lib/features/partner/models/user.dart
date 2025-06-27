@@ -35,4 +35,15 @@ class PartnerUser {
       role: json['role'] ?? 'customer',
     );
   }
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'fullname': fullname,
+      'email': email,
+      'phone': phone,
+      'status': status,
+      'role': role,
+      'description': description,
+    };
+  }
 }

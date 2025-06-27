@@ -174,9 +174,8 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
               onTap: () {
                 Navigator.push(context, MaterialPageRoute(
                     builder: (context) => ManageBookingsScreen(
-                        partner: widget.user,
-                        token: widget.token)
-                ));
+
+                )));
               },
             ),
             _buildDashboardCard(
