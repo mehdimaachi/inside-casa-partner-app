@@ -15,7 +15,8 @@ class Activity {
   final int partnerId;
   final DateTime? createdAt;
   final DateTime? updatedAt;
-  final bool isPromoted;
+  bool isPromoted;
+
 
   Activity({
     this.id,
@@ -79,6 +80,9 @@ class Activity {
       'image_urls': imageUrls,
       'category_id': categoryId,
       'partner_id': partnerId,
+      'is_promoted': isPromoted,
+      'createdAt': createdAt?.toIso8601String(),
+      'updatedAt': updatedAt?.toIso8601String(),
     };
   }
 }

@@ -1,4 +1,3 @@
-// Fichier: lib/features/partner/services/mock_service.dart
 import 'dart:math';
 import '../models/reservation.dart';
 import '../models/review.dart';
@@ -10,18 +9,49 @@ import '../models/restaurant.dart';
 class MockService {
   // Singleton pattern
   static final MockService _instance = MockService._internal();
+  final Map<int, bool> mockPromotionStatuses = {};
+
   factory MockService() => _instance;
-  MockService._internal();
 
-  // Mock data pour les réservations
+  MockService._internal() {
+    // Initialize mock data for listings
+    mockPromotionStatuses[1] = false;
+    mockPromotionStatuses[2] = true;
+    mockPromotionStatuses[3] = false;
+    mockPromotionStatuses[4] = true;
+    mockPromotionStatuses[5] = false;
+    mockPromotionStatuses[6] = false;
+    mockPromotionStatuses[7] = false;
+    mockPromotionStatuses[8] = false;
+  }
+
+  Future<Map<String, dynamic>> togglePromotionStatus(int listingId) async {
+    // Simulate a short delay to mimic an API call
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    if (!mockPromotionStatuses.containsKey(listingId)) {
+      throw Exception('Listing not found');
+    }
+
+    // Toggle the promotion status
+    mockPromotionStatuses[listingId] = !mockPromotionStatuses[listingId]!;
+
+    // Return the updated status
+    return {
+      'id': listingId,
+      'isPromoted': mockPromotionStatuses[listingId],
+    };
+  }
+
+  // Mock data for reservations
   Future<List<Reservation>> getPartnerReservations({String status = 'all'}) async {
-    // Simuler un délai réseau
-    await Future.delayed(Duration(milliseconds: 800));
+    // Simulate network delay
+    await Future.delayed(const Duration(milliseconds: 500));
 
-    // Générer les réservations mock directement
+    // Generate mock reservations directly
     List<Reservation> allReservations = _generateMockReservations();
 
-    // Filtrer par statut si spécifié
+    // Filter by status if specified
     if (status != 'all') {
       return allReservations.where((res) => res.status == status).toList();
     }
@@ -29,7 +59,7 @@ class MockService {
     return allReservations;
   }
 
-  // Méthode interne pour générer des réservations mock
+  // Internal method to generate mock reservations
   List<Reservation> _generateMockReservations() {
     return [
       Reservation(
@@ -179,24 +209,39 @@ class MockService {
     ];
   }
 
-  // Mettre à jour le statut d'une réservation
+  // Update reservation status
   Future<bool> updateReservationStatus(int reservationId, String newStatus) async {
-    // Simuler un délai réseau
     await Future.delayed(Duration(milliseconds: 600));
-    // Simuler une réponse réussie
+    // Simulate a successful response
     return true;
   }
 
-  // Mock data pour les avis
+  // Add confirmBooking method for compatibility
+  Future<void> confirmBooking(int reservationId) async {
+    try {
+      final isUpdated = await updateReservationStatus(reservationId, "confirmed");
+      if (isUpdated) {
+        print("Reservation $reservationId confirmed successfully.");
+      } else {
+        print("Failed to confirm reservation $reservationId.");
+      }
+    } catch (e) {
+      print("Error confirming reservation $reservationId: $e");
+    }
+  }
+
+
+
+  // Mock data for reviews
   Future<List<Review>> getPartnerReviews() async {
-    // Simuler un délai réseau
+    // Simulate network delay
     await Future.delayed(Duration(milliseconds: 700));
 
-    // Générer les avis directement
+    // Generate reviews directly
     return _getMockReviews();
   }
 
-  // Méthode interne pour générer des avis mock
+  // Internal method to generate mock reviews
   List<Review> _getMockReviews() {
     return [
       Review(
@@ -240,78 +285,77 @@ class MockService {
     ];
   }
 
-  // Répondre à un avis
+  // Reply to a review
   Future<bool> replyToReview(int reviewId, String replyText) async {
-    // Simuler un délai réseau
+    // Simulate network delay
     await Future.delayed(Duration(milliseconds: 600));
-    // Simuler une réponse réussie
+    // Simulate a successful response
     return true;
   }
 
-  // Mock data pour les statistiques
+  // Mock data for statistics
   Future<PartnerStats> getPartnerStatistics() async {
-    // Simuler un délai réseau
+    // Simulate network delay
     await Future.delayed(Duration(milliseconds: 900));
 
-    // Générer les statistiques directement
+    // Generate realistic statistics directly
     return _generateMockStats();
   }
 
-  // Méthode interne pour générer des statistiques mock
+// Internal method to generate realistic mock statistics
   PartnerStats _generateMockStats() {
-    final random = Random();
+    // Monthly data for the first half of the year (Jan to Jun)
+    final List<MonthlyData> monthlyData = [
+      MonthlyData(month: '2025-01', value: 16), // January
+      MonthlyData(month: '2025-02', value: 20), // February
+      MonthlyData(month: '2025-03', value: 12), // March
+      MonthlyData(month: '2025-04', value: 13), // April
+      MonthlyData(month: '2025-05', value: 6),  // May
+      MonthlyData(month: '2025-06', value: 24), // June
+    ];
 
-    // Données mensuelles pour les 6 derniers mois
-    final List<MonthlyData> monthlyData = [];
-    final now = DateTime.now();
+    // Calculate total bookings and revenue based on monthly data
+    final int totalBookings = monthlyData.fold(0, (sum, data) => sum + data.value);
+    final double totalRevenue = totalBookings * 60.0; // Assume average revenue per booking is $60.00
 
-    for (int i = 5; i >= 0; i--) {
-      final date = DateTime(now.year, now.month - i);
-      monthlyData.add(
-        MonthlyData(
-          month: '${date.year}-${date.month.toString().padLeft(2, '0')}',
-          value: random.nextInt(20) + 5, // Entre 5 et 25 réservations
-        ),
-      );
-    }
-
+    // Generate other realistic statistics
     return PartnerStats(
-      totalRevenue: 1234.56,
-      totalBookings: 78,
-      averageRating: 4.7,
+      totalRevenue: totalRevenue,
+      totalBookings: totalBookings,
+      averageRating: 4.7, // Static average rating
       monthlyBookings: monthlyData,
       topListings: [
         ListingPerformance(
           title: 'Tour de la Médina',
           bookingCount: 24,
-          revenue: 4800.0,
+          revenue: 1440.0,
           type: 'activity',
           id: 101,
         ),
         ListingPerformance(
           title: 'Restaurant La Sqala',
           bookingCount: 18,
-          revenue: 3600.0,
+          revenue: 1080.0,
           type: 'restaurant',
           id: 201,
         ),
         ListingPerformance(
           title: 'Cours de cuisine marocaine',
           bookingCount: 15,
-          revenue: 3000.0,
+          revenue: 900.0,
           type: 'activity',
           id: 102,
         ),
       ],
       additionalStats: {
-        'completionRate': 92.5,
-        'cancellationRate': 7.5,
-        'repeatCustomers': 12,
+        'completionRate': 91.0, // Slightly adjusted to be realistic
+        'cancellationRate': 9.0, // Slightly adjusted to be realistic
+        'repeatCustomers': 14,   // Increased slightly for realism
       },
     );
   }
 
-  // Obtenir la liste des activités
+  // Get the list of activities
   Future<List<Activity>> getPartnerActivities() async {
     await Future.delayed(Duration(milliseconds: 700));
 
@@ -361,7 +405,7 @@ class MockService {
     ];
   }
 
-  // Obtenir la liste des restaurants
+  // Get the list of restaurants
   Future<List<Restaurant>> getPartnerRestaurants() async {
     await Future.delayed(Duration(milliseconds: 700));
 

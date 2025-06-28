@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../models/reservation.dart';
 import '../services/api_service.dart';
 import '../services/mock_service.dart'; // Importation du service mock
-import '../models/user.dart';
 import 'package:shimmer/shimmer.dart'; // Pour l'effet de chargement
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 

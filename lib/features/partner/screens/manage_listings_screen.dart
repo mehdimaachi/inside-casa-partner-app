@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import '../models/activity.dart';
 import '../models/restaurant.dart';
 import '../models/user.dart';
+import '../services/mock_service.dart';
 
 class ManageListingsScreen extends StatefulWidget {
   final PartnerUser partner;
@@ -22,10 +23,13 @@ class ManageListingsScreen extends StatefulWidget {
 
 class _ManageListingsScreenState extends State<ManageListingsScreen> {
   final ApiService _apiService = ApiService();
-  // On utilise des Futures séparés pour chaque type de données
+  final MockService _mockService = MockService();
+
   late Future<List<Activity>> _activitiesFuture;
   late Future<List<Restaurant>> _restaurantsFuture;
-  final Map<int, bool> _isTogglingPromotion = {};
+
+  final Map<int, bool> _isTogglingPromotion = {
+  }; // Tracks promotion toggle state
 
   @override
   void initState() {
@@ -46,11 +50,12 @@ class _ManageListingsScreenState extends State<ManageListingsScreen> {
     final bool? shouldRefresh = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ActivityFormScreen(
-          authToken: widget.token,
-          partnerId: widget.partner.id,
-          activityToEdit: activityToEdit,
-        ),
+        builder: (context) =>
+            ActivityFormScreen(
+              authToken: widget.token,
+              partnerId: widget.partner.id,
+              activityToEdit: activityToEdit,
+            ),
       ),
     );
     if (shouldRefresh == true) {
@@ -62,27 +67,33 @@ class _ManageListingsScreenState extends State<ManageListingsScreen> {
     try {
       final int id = (item is Activity) ? item.id! : (item as Restaurant).id!;
       final bool isRestaurant = item is Restaurant;
-      await _apiService.deleteListing(widget.token, id, isRestaurant: isRestaurant);
+      await _apiService.deleteListing(
+          widget.token, id, isRestaurant: isRestaurant);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Listing deleted successfully.'), backgroundColor: Colors.green),
+        SnackBar(content: const Text('Listing deleted successfully.'),
+            backgroundColor: Colors.green),
       );
       _fetchListings();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.red),
+        SnackBar(
+            content: Text('Failed to delete: $e'), backgroundColor: Colors.red),
       );
     }
   }
 
   void _showDeleteConfirmation(dynamic item) {
-    final String itemName = (item is Activity) ? item.title : (item as Restaurant).name;
+    final String itemName = (item is Activity)
+        ? item.title
+        : (item as Restaurant).name;
     showDialog(
       context: context,
       builder: (BuildContext ctx) {
         return AlertDialog(
           title: const Text('Confirm Deletion'),
-          content: Text('Are you sure you want to permanently delete "$itemName"?'),
+          content: Text(
+              'Are you sure you want to permanently delete "$itemName"?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
@@ -103,15 +114,21 @@ class _ManageListingsScreenState extends State<ManageListingsScreen> {
   }
 
   Future<void> _togglePromotion(dynamic item) async {
-    final int id = item.id!;
+    final int id = item.id!; // Assuming listings have a unique ID
+    print('Toggling promotion for listing ID: $id');
     setState(() => _isTogglingPromotion[id] = true);
 
     try {
-      await _apiService.togglePromotionStatus(widget.token, id);
-      _fetchListings(); // Rafraîchit les données pour mettre à jour l'UI
+      final updatedStatus = await _mockService.togglePromotionStatus(id);
+      setState(() {
+        item.isPromoted = updatedStatus['isPromoted']; // Update local state
+      });
+      print('Promotion status updated: $updatedStatus'); // Debugging log
     } catch (e) {
+      print('Error while toggling promotion: $e'); // Debugging log
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update promotion: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Failed to update promotion: $e'),
+            backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) {
@@ -131,19 +148,21 @@ class _ManageListingsScreenState extends State<ManageListingsScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text("Error fetching listings: ${snapshot.error}"));
+            return Center(
+                child: Text("Error fetching listings: ${snapshot.error}"));
           }
           if (!snapshot.hasData) {
             return const Center(child: Text("No listings found."));
           }
 
-          // On caste explicitement les résultats pour garantir la sécurité des types
           final List<Activity> activities = snapshot.data![0].cast<Activity>();
-          final List<Restaurant> restaurants = snapshot.data![1].cast<Restaurant>();
+          final List<Restaurant> restaurants = snapshot.data![1].cast<
+              Restaurant>();
           final List<dynamic> combinedList = [...activities, ...restaurants];
 
           if (combinedList.isEmpty) {
-            return const Center(child: Text("You haven't created any listings yet."));
+            return const Center(
+                child: Text("You haven't created any listings yet."));
           }
 
           return RefreshIndicator(
@@ -170,9 +189,13 @@ class _ManageListingsScreenState extends State<ManageListingsScreen> {
     final isActivity = item is Activity;
     final id = item.id!;
     final title = isActivity ? item.title : (item as Restaurant).name;
-    final subtitle = isActivity ? "Activity: ${item.price} MAD" : "Restaurant: ${item.address}";
+    final subtitle = isActivity
+        ? "Activity: ${item.price} MAD"
+        : "Restaurant: ${item.address}";
     final icon = isActivity ? Icons.directions_walk : Icons.restaurant;
-    final isPromoted = item.isPromoted ?? false;
+    final isPromoted = isActivity
+        ? item.isPromoted
+        : null; // Access 'isPromoted' only for Activity
     final isToggling = _isTogglingPromotion[id] ?? false;
 
     return Card(
@@ -181,27 +204,33 @@ class _ManageListingsScreenState extends State<ManageListingsScreen> {
         leading: Icon(icon, color: AppTheme.primaryBlue),
         title: Row(
           children: [
-            if (isPromoted) const Icon(Icons.star, color: Colors.amber, size: 20),
-            if (isPromoted) const SizedBox(width: 8),
-            Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold))),
+            if (isActivity && isPromoted == true) const Icon(
+                Icons.star, color: Colors.amber, size: 20),
+            if (isActivity && isPromoted == true) const SizedBox(width: 8),
+            Expanded(child: Text(
+                title, style: const TextStyle(fontWeight: FontWeight.bold))),
           ],
         ),
         subtitle: Text(subtitle),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (isToggling)
-              const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+            if (isActivity && isToggling)
+              const SizedBox(width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2))
             else
-              Switch(
-                value: isPromoted,
-                onChanged: (value) => _togglePromotion(item),
-                activeTrackColor: Colors.amber.withOpacity(0.5),
-                activeColor: Colors.amber,
-              ),
+              if (isActivity)
+                Switch(
+                  value: isPromoted ?? false,
+                  onChanged: (value) => _togglePromotion(item),
+                  activeTrackColor: Colors.amber.withOpacity(0.5),
+                  activeColor: Colors.amber,
+                ),
             IconButton(
               icon: const Icon(Icons.edit, color: Colors.blue),
-              onPressed: () => isActivity ? _navigateToForm(activityToEdit: item) : null,
+              onPressed: () =>
+              isActivity ? _navigateToForm(activityToEdit: item) : null,
             ),
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),

@@ -12,6 +12,7 @@ import '../models/reservation.dart';
 import '../models/restaurant.dart';
 import '../models/review.dart';
 import '../models/partner_stats.dart';
+import '../services/mock_service.dart';
 
 class ApiService {
   static const String _baseUrl = 'https://insidecasa.me';
@@ -126,20 +127,6 @@ class ApiService {
     }
   }
 
-  Future<List<Reservation>> getPartnerReservations({String status = 'all'}) async {
-    try {
-      final token = await getStoredToken();
-      // Vous pouvez récupérer l'ID du partenaire depuis le token ou le stocker ailleurs
-      final user = await getMyProfile(token);
-      return await getBookingsForPartner(
-          partnerId: user.id ?? 0,
-          token: token
-      );
-    } catch (e) {
-      throw Exception('Error fetching reservations: $e');
-    }
-  }
-
   // --- LISTING & ACTIVITY MANAGEMENT ---
 
   Future<List<Activity>> getActivitiesForPartner({required int partnerId, required String token}) async {
@@ -153,52 +140,6 @@ class ApiService {
     } else {
       throw Exception('Failed to load activities for partner');
     }
-  }
-
-  // --- STATISTICS & ANALYTICS ---
-
-  // Méthode ajoutée pour les statistiques partenaires
-  Future<PartnerStats> getPartnerStatistics() async {
-    try {
-      // Récupérer le token depuis le stockage sécurisé
-      final token = await getStoredToken();
-
-      final response = await http.get(
-        Uri.parse('$_baseUrl/api/partner/stats'),
-        headers: _getAuthHeaders(token),
-      );
-
-      if (response.statusCode == 200) {
-        return PartnerStats.fromJson(jsonDecode(response.body));
-      } else {
-        throw Exception('Failed to load partner statistics. Status: ${response.statusCode}');
-      }
-    } catch (e) {
-      throw Exception('Error retrieving partner statistics: $e');
-    }
-  }
-
-  // Cette méthode peut être utilisée par la nouvelle méthode ci-dessus
-  Future<PartnerStats> getPartnerStats(String token) async {
-    final response = await http.get(
-      Uri.parse('$_baseUrl/api/partner/stats'),
-      headers: _getAuthHeaders(token),
-    );
-    if (response.statusCode == 200) {
-      return PartnerStats.fromJson(jsonDecode(response.body));
-    } else {
-      throw Exception('Failed to load partner statistics');
-    }
-  }
-
-  // Utilitaire pour récupérer le token stocké
-  Future<String> getStoredToken() async {
-    const secureStorage = FlutterSecureStorage();
-    final token = await secureStorage.read(key: 'jwt_token');
-    if (token == null) {
-      throw Exception('No authentication token found. Please login again.');
-    }
-    return token;
   }
 
   Future<List<Restaurant>> getRestaurantsForPartner({required int partnerId, required String token}) async {
@@ -275,50 +216,13 @@ class ApiService {
 
   // --- RESERVATION MANAGEMENT ---
 
-  Future<Map<String, dynamic>> togglePromotionStatus(String token, int listingId) async {
-    // CONFIRMEZ CET ENDPOINT AVEC VOTRE DÉVELOPPEUR BACKEND
-    final url = Uri.parse('$_baseUrl/api/listings/$listingId/promote');
-
+  Future<List<Reservation>> getPartnerReservations({String status = 'all'}) async {
     try {
-      final response = await http.post(
-        url,
-        headers: _getAuthHeaders(token),
-      );
-
-      if (response.statusCode == 200) {
-        // Le serveur devrait retourner l'objet mis à jour
-        return json.decode(response.body);
-      } else {
-        throw Exception('Failed to update promotion status');
-      }
+      // Use MockService to fetch reservations
+      final mockService = MockService();
+      return await mockService.getPartnerReservations(status: status);
     } catch (e) {
-      rethrow;
-    }
-  }
-
-  Future<List<Reservation>> getActivityReservations(String token) async {
-    final response = await http.get(
-      Uri.parse('$_baseUrl/api/reservations'),
-      headers: _getAuthHeaders(token),
-    );
-    if (response.statusCode == 200) {
-      List<dynamic> body = jsonDecode(response.body);
-      return body.map((dynamic item) => Reservation.fromJson(item)).toList();
-    } else {
-      throw Exception('Failed to load activity reservations');
-    }
-  }
-
-  Future<List<RestaurantReservation>> getRestaurantReservations(String token) async {
-    final response = await http.get(
-      Uri.parse('$_baseUrl/api/restaurantreservations'),
-      headers: _getAuthHeaders(token),
-    );
-    if (response.statusCode == 200) {
-      List<dynamic> body = jsonDecode(response.body);
-      return body.map((dynamic item) => RestaurantReservation.fromJson(item)).toList();
-    } else {
-      throw Exception('Failed to load restaurant reservations');
+      throw Exception('Error fetching reservations: $e');
     }
   }
 
@@ -336,30 +240,6 @@ class ApiService {
     }
   }
 
-  Future<List<Reservation>> getBookingsForPartner({required int partnerId, required String token}) async {
-    // On utilise le nouvel endpoint que vous avez fourni
-    final url = Uri.parse('$_baseUrl/reservations/partner/$partnerId');
-
-    try {
-      final response = await http.get(
-        url,
-        headers: _getAuthHeaders(token),
-      );
-
-      if (response.statusCode == 200) {
-        final List<dynamic> body = jsonDecode(response.body);
-        // Nous mappons la réponse JSON à une liste d'objets Reservation
-        return body.map((dynamic item) => Reservation.fromJson(item)).toList();
-      } else {
-        // Gère les erreurs si le serveur ne répond pas 200 OK
-        throw Exception('Failed to load bookings for partner. Status code: ${response.statusCode}');
-      }
-    } catch (e) {
-      // Gère les erreurs de connexion ou autres exceptions
-      throw Exception('Error fetching bookings: $e');
-    }
-  }
-
   // --- REVIEW MANAGEMENT ---
 
   Future<List<Review>> getActivityReviews(String token, {required int activityId}) async {
@@ -373,7 +253,6 @@ class ApiService {
     }
   }
 
-  // Récupérer tous les avis du partenaire
   Future<List<Review>> getPartnerReviews() async {
     try {
       final token = await getStoredToken();
@@ -393,7 +272,15 @@ class ApiService {
     }
   }
 
-  // Répondre à un avis
+  Future<String> getStoredToken() async {
+    const secureStorage = FlutterSecureStorage();
+    final token = await secureStorage.read(key: 'jwt_token');
+    if (token == null) {
+      throw Exception('No authentication token found. Please login again.');
+    }
+    return token;
+  }
+
   Future<bool> replyToReview(int reviewId, String replyText) async {
     try {
       final token = await getStoredToken();
@@ -409,4 +296,3 @@ class ApiService {
     }
   }
 }
-

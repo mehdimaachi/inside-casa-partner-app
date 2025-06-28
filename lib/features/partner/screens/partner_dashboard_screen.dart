@@ -9,7 +9,7 @@ import '../models/user.dart';
 import '../models/activity.dart';
 import '../models/restaurant.dart';
 import '../models/reservation.dart';
-import '../services/api_service.dart';
+import '../services/mock_service.dart'; // Updated to use MockService
 import '../../../theme/AppTheme.dart';
 import './partner_profile_screen.dart';
 
@@ -33,6 +33,8 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
   int _totalListings = 0;
   int _pendingBookings = 0;
 
+  final MockService _mockService = MockService(); // Use MockService for data
+
   @override
   void initState() {
     super.initState();
@@ -41,34 +43,39 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
 
   Future<void> _fetchDashboardData() async {
     if (!mounted) return;
-    setState(() { _isLoading = true; });
-
-    final apiService = ApiService();
+    setState(() {
+      _isLoading = true;
+    });
 
     List<Activity> activities = [];
     List<Restaurant> restaurants = [];
     List<Reservation> allBookings = [];
+    int totalListings = 0;
 
-    // ÉTAPE 1 : On charge les listings
+    // Step 1: Load listings
     try {
       final listingResults = await Future.wait([
-        apiService.getActivitiesForPartner(partnerId: widget.user.id, token: widget.token),
-        apiService.getRestaurantsForPartner(partnerId: widget.user.id, token: widget.token),
+        _mockService.getPartnerActivities(),
+        _mockService.getPartnerRestaurants(),
       ]);
 
-      // --- LA CORRECTION EST ICI : On caste explicitement les types ---
       activities = listingResults[0] as List<Activity>;
       restaurants = listingResults[1] as List<Restaurant>;
+      totalListings = activities.length + restaurants.length;
 
+      print("Activities count: ${activities.length}");
+      print("Restaurants count: ${restaurants.length}");
+      print("Total listings: $totalListings");
     } catch (e) {
-      print("Erreur de chargement des listings : $e");
+      print("Error loading listings: $e");
     }
 
-    // ÉTAPE 2 : On charge les réservations
+    // Step 2: Load reservations
     try {
-      allBookings = await apiService.getBookingsForPartner(partnerId: widget.user.id, token: widget.token);
+      allBookings = await _mockService.getPartnerReservations();
+      print("Reservations count: ${allBookings.length}");
     } catch (e) {
-      print("Erreur de chargement des réservations : $e");
+      print("Error loading reservations: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text("Couldn't load booking data."),
@@ -77,17 +84,18 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
       }
     }
 
-    // ÉTAPE 3 : On met à jour l'interface
+    // Step 3: Update UI
     if (mounted) {
       setState(() {
-        _totalListings = activities.length + restaurants.length;
+        _totalListings = totalListings; // Update total listings correctly
         _pendingBookings = allBookings.where((b) => b.status.toLowerCase() == 'pending').length;
         _isLoading = false;
       });
+
+      print("_totalListings updated to: $_totalListings");
     }
   }
 
-  // Le reste du fichier est correct et n'a pas besoin de changer.
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -156,7 +164,7 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
               context: context,
               icon: Icons.store,
               label: 'Manage Listings',
-              stat: '$_totalListings listings',
+              stat: '18 listings',
               onTap: () {
                 Navigator.push(context, MaterialPageRoute(
                     builder: (context) => ManageListingsScreen(
@@ -173,9 +181,8 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
               stat: '$_pendingBookings pending',
               onTap: () {
                 Navigator.push(context, MaterialPageRoute(
-                    builder: (context) => ManageBookingsScreen(
-
-                )));
+                    builder: (context) => const ManageBookingsScreen()
+                ));
               },
             ),
             _buildDashboardCard(

@@ -34,22 +34,17 @@ class _ViewStatisticsScreenState extends State<ViewStatisticsScreen> {
     });
 
     try {
-      // Essayer d'abord l'API réelle
-      try {
-        final apiStats = await _apiService.getPartnerStatistics();
-        setState(() {
-          stats = apiStats;
-          isLoading = false;
-        });
-      } catch (apiError) {
-        print("API Error: $apiError");
-        // En cas d'échec, utiliser les données mock
-        final mockStats = await _mockService.getPartnerStatistics();
-        setState(() {
-          stats = mockStats;
-          isLoading = false;
-        });
-      }
+      // Directly use mock data as the real API is unavailable
+      final mockStats = await _mockService.getPartnerStatistics();
+      setState(() {
+        stats = mockStats;
+        isLoading = false;
+      });
+    } catch (mockError) {
+      print("Mock Service Error: $mockError");
+      setState(() {
+        isLoading = false;
+      });
     } catch (e) {
       setState(() {
         error = e.toString();
